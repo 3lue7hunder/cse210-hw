@@ -1,99 +1,108 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 public class Journal
 {
     private List<Entry> _entries = new List<Entry>();
-    private static readonly Random _random = new Random();
 
-    private List<string> _prompts = new List<string>
+    public void AddEntry(Entry entry)
     {
-        "Who was the most interesting person I interacted with today?",
-        "What was the best part of my day?",
-        "How did I see the hand of the Lord in my life today?",
-        "What was the strongest emotion I felt today?",
-        "If I had one thing I could do over today, what would it be?"
-    };
+        _entries.Add(entry);
+    }
 
-    public void AddEntry()
+    public bool DeleteEntry(int index)
     {
-        string prompt = _prompts[_random.Next(_prompts.Count)];
-        Console.WriteLine($"Prompt: {prompt}");
-        Console.Write("Your response: ");
-        string response = Console.ReadLine();
+        if (index >= 0 && index < _entries.Count)
+        {
+            _entries.RemoveAt(index);
+            return true;
+        }
+        return false;
+    }
 
-        string date = DateTime.Now.ToShortDateString();
-        _entries.Add(new Entry(date, prompt, response));
-        Console.WriteLine("Entry added successfully!\n");
+    public List<Entry> SearchEntries(string keyword)
+    {
+        return _entries
+            .Where(e => e.Prompt.Contains(keyword, StringComparison.OrdinalIgnoreCase) ||
+                        e.Response.Contains(keyword, StringComparison.OrdinalIgnoreCase))
+            .ToList();
     }
 
     public void DisplayAll()
     {
         if (_entries.Count == 0)
         {
-            Console.WriteLine("The journal is empty.\n");
+            Console.WriteLine("No entries to display.");
             return;
         }
 
         for (int i = 0; i < _entries.Count; i++)
         {
-            Console.WriteLine($"Entry #{i + 1}");
-            _entries[i].Display();
+            Console.WriteLine($"Entry #{i + 1}:\n{_entries[i]}");
         }
     }
 
-    public void SaveToFile(string filename)
+    public void SaveToFile(string fileName)
     {
-        using (StreamWriter writer = new StreamWriter(filename))
+        using (StreamWriter outputFile = new StreamWriter(fileName))
         {
-            foreach (var entry in _entries)
+            foreach (Entry entry in _entries)
             {
-                writer.WriteLine($"{entry.Date}|{entry.Prompt}|{entry.Response}");
+                outputFile.WriteLine(entry.ToCsv());
             }
         }
-        Console.WriteLine("Journal saved successfully!\n");
     }
 
-    public void LoadFromFile(string filename)
+    public void LoadFromFile(string fileName)
     {
-        if (!File.Exists(filename))
+        if (File.Exists(fileName))
         {
-            Console.WriteLine("File not found.\n");
-            return;
-        }
-
-        _entries.Clear();
-        string[] lines = File.ReadAllLines(filename);
-        foreach (string line in lines)
-        {
-            string[] parts = line.Split('|');
-            if (parts.Length == 3)
+            _entries.Clear();
+            string[] lines = File.ReadAllLines(fileName);
+            foreach (string line in lines)
             {
-                _entries.Add(new Entry(parts[0], parts[1], parts[2]));
+                _entries.Add(Entry.FromCsv(line));
             }
-        }
-        Console.WriteLine("Journal loaded successfully!\n");
-    }
-
-    public void DeleteEntry()
-    {
-        if (_entries.Count == 0)
-        {
-            Console.WriteLine("The journal is empty. There is nothing to delete.\n");
-            return;
-        }
-
-        DisplayAll();
-        Console.Write("Enter the entry number to delete: ");
-        if (int.TryParse(Console.ReadLine(), out int entryNumber) && entryNumber > 0 && entryNumber <= _entries.Count)
-        {
-            _entries.RemoveAt(entryNumber - 1);
-            Console.WriteLine("Entry deleted successfully!\n");
         }
         else
         {
-            Console.WriteLine("Invalid entry number. No changes made.\n");
+            Console.WriteLine($"File {fileName} not found.");
+        }
+    }
+
+    public void ExportToCsv(string fileName)
+    {
+        SaveToFile(fileName);
+    }
+
+    public void ImportFromCsv(string fileName)
+    {
+        LoadFromFile(fileName);
+    }
+
+    public void DisplayAnalytics()
+    {
+        Console.WriteLine($"Total Entries: {_entries.Count}");
+
+        var mostUsedPrompt = _entries
+            .GroupBy(e => e.Prompt)
+            .OrderByDescending(g => g.Count())
+            .FirstOrDefault()?.Key;
+
+        Console.WriteLine($"Most Used Prompt: {mostUsedPrompt ?? "N/A"}");
+
+        var mostCommonWords = _entries
+            .SelectMany(e => e.Response.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            .GroupBy(word => word.ToLower())
+            .OrderByDescending(g => g.Count())
+            .Take(5);
+
+        Console.WriteLine("Most Common Words in Responses:");
+        foreach (var word in mostCommonWords)
+        {
+            Console.WriteLine($"{word.Key} ({word.Count()})");
         }
     }
 }
